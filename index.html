@@ -25,16 +25,6 @@
             -webkit-touch-callout: none;
             -webkit-tap-highlight-color: transparent;
         }
-        
-        .background-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0); /* Темная подложка */
-            z-index: -1;
-        }
 
         /* Экран загрузки */
         #loadingScreen {
@@ -59,7 +49,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url('https://dl.dropboxusercontent.com/scl/fi/bjp9g7q494lggqjbluq9g/.jpg?rlkey=l9cq946apz6drp3opzsi8y94b'); /* Добавьте вашу ссылку сюда */
+            background-image: url('https://dl.dropboxusercontent.com/scl/fi/cur5tmpgdu1k906yi7cgg/222.jpg?rlkey=s64fm2dekhevcn1u1elww2rwr');
             background-size: cover;
             background-position: center;
             filter: blur(5px);
@@ -80,7 +70,7 @@
             height: 80px;
         }
 
-        /* Заполняющееся прогресс-кольцо */
+        /* Заполняющееся прогресс-кольцо с закругленными краями */
         .progress-circle {
             width: 100%;
             height: 100%;
@@ -104,18 +94,6 @@
                 initial-value: 0deg;
                 inherits: false;
             }
-        }
-
-        /* Проценты в центре */
-        #loadingPercent {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: white;
-            font-size: 12px;
-            font-weight: bold;
-            text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
         }
 
         #imageContainer {
@@ -178,6 +156,7 @@
             font-size: 14px;
             z-index: 1000;
             backdrop-filter: blur(5px);
+            display: none; /* Счетчик скрыт до показа галереи */
         }
     </style>
 </head>
@@ -185,12 +164,10 @@
     <!-- Экран загрузки -->
     <div id="loadingScreen">
         <div id="loadingBackground"></div>
-        <div class="background-overlay"></div>
         <div class="loading-indicator">
             <div class="progress-ring">
                 <div class="progress-circle"></div>
             </div>
-            <div id="loadingPercent">0%</div>
         </div>
     </div>
 
@@ -227,7 +204,6 @@ const container = document.getElementById('imageContainer');
 const customScrollbar = document.getElementById('customScrollbar');
 const counterElement = document.getElementById('counter');
 const loadingScreen = document.getElementById('loadingScreen');
-const loadingPercent = document.getElementById('loadingPercent');
 const loadingBackground = document.getElementById('loadingBackground');
 
 // Переменные
@@ -265,7 +241,7 @@ async function initializeGallery() {
 // Функция для загрузки резервного изображения
 async function loadBackupImage() {
     try {
-        const backupImageUrl = 'https://dl.dropboxusercontent.com/scl/fi/ud41xrucy8trznbv8h05k/111.jpg?rlkey=31kfork0w5lo77akjwj9ci0f1'; // Добавьте вашу ссылку сюда
+        const backupImageUrl = 'https://dl.dropboxusercontent.com/scl/fi/ud41xrucy8trznbv8h05k/111.jpg?rlkey=31kfork0w5lo77akjwj9ci0f1';
         if (backupImageUrl) {
             const response = await fetch(backupImageUrl);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -330,9 +306,7 @@ async function loadImagesSequentially() {
             
             // Обновляем прогресс
             loadedCount++;
-            const progress = Math.round((loadedCount / imageLinks.length) * 100);
-            const progressDeg = (progress * 3.6) + 'deg';
-            loadingPercent.textContent = `${progress}%`;
+            const progressDeg = (loadedCount / imageLinks.length) * 360 + 'deg';
 
             // Обновляем прогресс-кольцо
             const progressCircle = document.querySelector('.progress-circle');
@@ -352,9 +326,7 @@ async function loadImagesSequentially() {
             console.error(`Ошибка загрузки изображения ${i + 1}:`, error);
             // Увеличиваем счетчик даже при ошибке, чтобы прогресс продолжался
             loadedCount++;
-            const progress = Math.round((loadedCount / imageLinks.length) * 100);
-            const progressDeg = (progress * 3.6) + 'deg';
-            loadingPercent.textContent = `${progress}%`;
+            const progressDeg = (loadedCount / imageLinks.length) * 360 + 'deg';
 
             // Обновляем прогресс-кольцо
             const progressCircle = document.querySelector('.progress-circle');
@@ -380,6 +352,9 @@ function showGallery() {
     
     // Показываем галерею
     container.style.display = 'block';
+    
+    // Показываем счетчик
+    counterElement.style.display = 'block';
     
     // Инициализируем скроллбар и счетчик
     initScrollbar();
