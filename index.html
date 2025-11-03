@@ -47,12 +47,23 @@
             position: absolute;
             top: 0;
             left: 0;
-            background-image: url('https://dl.dropboxusercontent.com/scl/fi/9ys9jvrh1b62fedyl7xl0/e6a13c62caca67576945995a8cc9edb4.jpg?rlkey=6n0b31z18niia6oygrx0onnwo');
+            background-image: url('https://dl.dropboxusercontent.com/scl/fi/5lso7dzzfzh0v9jaah0y7/98f07f922d694b3e656e93370e1b8fab.jpg?rlkey=br0gavfhq4x0f0ov90zp25kkr');
             background-size: cover;
             background-position: center;
+            width: 110%;
+            height: 110%;
+            filter: blur(10px);
+            z-index: -1;
+            transform: translate(-5%, -5%);
+        }
+
+        .background-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
             width: 100%;
             height: 100%;
-            filter: blur(10px);
+            background-color: rgba(0, 0, 0, 0.5); /* Затемнение 50% */
             z-index: -1;
         }
 
