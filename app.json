@@ -1,0 +1,7 @@
+{
+    "name": "MyTelegramMiniApp",
+    "description": "Mini App for Telegram Bot",
+    "runtime": "python",
+    "command": "python server.py",
+    "type": "web"
+}
