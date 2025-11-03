@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://telegram.org/js/telegram-web-app.js  "></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * {
             box-sizing: border-box;
@@ -26,35 +26,62 @@
             -webkit-tap-highlight-color: transparent;
         }
         
+        /* === ИЗМЕНЕНИЕ: добавляем стили для фонового изображения === */
+        #backgroundImage {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url(''); /* Добавьте вашу ссылку сюда */
+            background-size: cover;
+            background-position: center;
+            filter: blur(10px);
+            opacity: 0.7;
+            z-index: -1;
+        }
+        
+        /* === ИЗМЕНЕНИЕ: заменяем стили индикатора загрузки на горизонтальную полоску === */
+        #loadingIndicator {
+            position: fixed;
+            top: 50%;
+            left: 10%;
+            width: 80%;
+            height: 4px;
+            background-color: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            overflow: hidden;
+            z-index: 1002;
+        }
+        
+        #loadingProgress {
+            height: 100%;
+            width: 0%;
+            background-color: white;
+            border-radius: 2px;
+            animation: loading 1.5s ease-in-out infinite;
+        }
+        
+        @keyframes loading {
+            0% { transform: translateX(-100%); }
+            50% { transform: translateX(0%); }
+            100% { transform: translateX(100%); }
+        }
+
         #imageContainer {
             width: 100%;
             flex-grow: 1;
             overflow-y: auto;
             position: relative;
-            /* Полностью скрываем стандартную полосу прокрутки */
-            scrollbar-width: none; /* Firefox */
-            -ms-overflow-style: none; /* IE и Edge */
-            /* === ИЗМЕНЕНИЕ: скрываем контейнер до полной загрузки === */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
             display: none;
         }
 
-        /* === ИЗМЕНЕНИЕ: добавляем стили для индикатора загрузки === */
-        #loadingIndicator {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: var(--tg-theme-text-color);
-            font-size: 16px;
-            z-index: 1002;
-        }
-
-        /* Скрываем стандартную полосу прокрутки в WebKit браузерах */
         #imageContainer::-webkit-scrollbar {
             display: none;
         }
 
-        /* Кастомный скроллбар */
         #customScrollbar {
             position: fixed;
             top: 0;
@@ -105,8 +132,11 @@
     </style>
 </head>
 <body>
-    <!-- === ИЗМЕНЕНИЕ: добавляем индикатор загрузки === -->
-    <div id="loadingIndicator">Загрузка изображений...</div>
+    <!-- === ИЗМЕНЕНИЕ: добавляем фоновое изображение и новый индикатор загрузки === -->
+    <div id="backgroundImage"></div>
+    <div id="loadingIndicator">
+        <div id="loadingProgress"></div>
+    </div>
     <div id="imageContainer"></div>
     <div id="customScrollbar"></div>
     <div id="counter">0 / 0</div>
@@ -138,30 +168,34 @@ function getUrlParams() {
 const container = document.getElementById('imageContainer');
 const customScrollbar = document.getElementById('customScrollbar');
 const counterElement = document.getElementById('counter');
-// === ИЗМЕНЕНИЕ: получаем элемент индикатора загрузки ===
 const loadingIndicator = document.getElementById('loadingIndicator');
+const backgroundImage = document.getElementById('backgroundImage');
 
 // Переменные
 const imageLinks = getUrlParams();
 let currentImageIndex = 0;
 let scrollTimeout;
 let isScrolling = false;
-// === ИЗМЕНЕНИЕ: добавляем переменную для отслеживания загрузки ===
 let imagesLoaded = false;
 
-// === ИЗМЕНЕНИЕ: заменяем старую логику загрузки на новую ===
-// Основная функция инициализации
+// === ИЗМЕНЕНИЕ: обновленная функция инициализации ===
 async function initializeGallery() {
     if (imageLinks.length === 0) {
-        loadingIndicator.textContent = 'Изображения не найдены.';
+        // Если нет изображений, загружаем одну картинку по ссылке (добавьте вашу ссылку)
+        await loadBackupImage();
         return;
     }
 
     try {
-        // Используем способ 2: загрузка через Blob URL
         await loadImagesWithBlobUrls();
         
-        // После загрузки всех изображений инициализируем галерею
+        // Проверяем, загрузились ли хоть какие-то изображения
+        const loadedImages = container.getElementsByTagName('img').length;
+        if (loadedImages === 0) {
+            // Если ни одно изображение не загрузилось, загружаем резервное
+            await loadBackupImage();
+        }
+        
         imagesLoaded = true;
         loadingIndicator.style.display = 'none';
         container.style.display = 'block';
@@ -170,11 +204,47 @@ async function initializeGallery() {
         
     } catch (error) {
         console.error('Ошибка загрузки изображений:', error);
-        loadingIndicator.textContent = 'Ошибка загрузки изображений';
+        // В случае ошибки тоже загружаем резервное изображение
+        await loadBackupImage();
     }
 }
 
-// === ИЗМЕНЕНИЕ: способ 2 - загрузка через Blob URL ===
+// === ИЗМЕНЕНИЕ: функция для загрузки резервного изображения ===
+async function loadBackupImage() {
+    try {
+        const backupImageUrl = ''; // Добавьте вашу ссылку сюда
+        if (backupImageUrl) {
+            const response = await fetch(backupImageUrl);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            const imgElement = new Image();
+            imgElement.src = blobUrl;
+            imgElement.alt = 'Backup Image';
+            imgElement.setAttribute('draggable', 'false');
+
+            imgElement.addEventListener('contextmenu', function(event) {
+                event.preventDefault();
+                return false;
+            }, { passive: false });
+
+            container.appendChild(imgElement);
+            
+            imagesLoaded = true;
+            loadingIndicator.style.display = 'none';
+            container.style.display = 'block';
+            initScrollbar();
+            updateCounter();
+        }
+    } catch (error) {
+        console.error('Ошибка загрузки резервного изображения:', error);
+        loadingIndicator.style.display = 'none';
+    }
+}
+
+// === ИЗМЕНЕНИЕ: обновленная функция загрузки изображений ===
 async function loadImagesWithBlobUrls() {
     const loadPromises = imageLinks.map(async (link, index) => {
         try {
@@ -189,42 +259,39 @@ async function loadImagesWithBlobUrls() {
             imgElement.alt = `Image ${index + 1}`;
             imgElement.setAttribute('draggable', 'false');
 
-            // Добавляем обработчик contextmenu к каждому изображению
             imgElement.addEventListener('contextmenu', function(event) {
                 event.preventDefault();
                 return false;
             }, { passive: false });
 
-            // Обработчик ошибки загрузки изображения
+            // === ИЗМЕНЕНИЕ: убираем обработчик ошибок с сообщениями ===
             imgElement.onerror = function() {
                 console.error(`Ошибка загрузки изображения ${index + 1}`);
-                // Можно добавить placeholder вместо битого изображения
+                // Не добавляем изображение в контейнер при ошибке
             };
 
-            container.appendChild(imgElement);
-            return Promise.resolve();
+            // Добавляем изображение только если оно загрузилось успешно
+            await new Promise((resolve, reject) => {
+                imgElement.onload = resolve;
+                imgElement.onerror = resolve; // Разрешаем промис даже при ошибке
+            });
+
+            // Проверяем, загрузилось ли изображение успешно
+            if (imgElement.complete && imgElement.naturalHeight !== 0) {
+                container.appendChild(imgElement);
+            }
             
         } catch (error) {
             console.error(`Ошибка загрузки изображения ${index + 1}:`, error);
-            // Создаем placeholder для неудачно загруженного изображения
-            const errorDiv = document.createElement('div');
-            errorDiv.textContent = `Ошибка загрузки изображения ${index + 1}`;
-            errorDiv.style.textAlign = 'center';
-            errorDiv.style.padding = '20px';
-            errorDiv.style.color = 'var(--tg-theme-hint-color)';
-            container.appendChild(errorDiv);
-            return Promise.resolve();
+            // Не создаем сообщения об ошибках
         }
     });
 
-    // Ждем загрузки всех изображений
     await Promise.all(loadPromises);
 }
 
-// === ИЗМЕНЕНИЕ: способ 1 - отложенная загрузка до полной готовности страницы ===
 // Загружаем галерею только когда страница полностью готова
 window.addEventListener('load', function() {
-    // Небольшая задержка для гарантии полной загрузки
     setTimeout(initializeGallery, 100);
 });
 
@@ -232,7 +299,6 @@ window.addEventListener('load', function() {
 function initScrollbar() {
     updateCustomScrollbar();
 
-    // Обработчики событий
     container.addEventListener('scroll', function() {
         if (!isScrolling) {
             customScrollbar.classList.add('visible');
@@ -242,7 +308,6 @@ function initScrollbar() {
         updateCurrentImageIndex();
         updateCustomScrollbar();
 
-        // Скрываем скроллбар через 1 секунду после остановки прокрутки
         clearTimeout(scrollTimeout);
         scrollTimeout = setTimeout(() => {
             customScrollbar.classList.remove('visible');
@@ -250,10 +315,8 @@ function initScrollbar() {
         }, 1000);
     });
 
-    // Также обновляем при изменении размера окна
     window.addEventListener('resize', updateCustomScrollbar);
 
-    // Принудительно показываем скроллбар на 2 секунды при загрузке, если есть прокрутка
     if (container.scrollHeight > container.clientHeight) {
         customScrollbar.classList.add('visible');
         setTimeout(() => {
@@ -270,7 +333,6 @@ function updateCustomScrollbar() {
     const scrollHeight = container.scrollHeight;
     const clientHeight = container.clientHeight;
 
-    // Проверяем, нужна ли вообще полоса прокрутки
     if (scrollHeight <= clientHeight) {
         customScrollbar.style.display = 'none';
         return;
@@ -278,14 +340,11 @@ function updateCustomScrollbar() {
 
     customScrollbar.style.display = 'block';
 
-    // Вычисляем размер и позицию скроллбара
     const scrollableHeight = scrollHeight - clientHeight;
     const scrollPercent = scrollTop / scrollableHeight;
 
-    // Высота скроллбара пропорциональна видимой области
     const scrollbarHeight = Math.max((clientHeight / scrollHeight) * clientHeight, 40);
 
-    // Позиция скроллбара
     const scrollbarTop = scrollPercent * (clientHeight - scrollbarHeight);
 
     customScrollbar.style.height = scrollbarHeight + 'px';
@@ -316,7 +375,8 @@ function updateCurrentImageIndex() {
 }
 
 function updateCounter() {
-    counterElement.textContent = `${currentImageIndex + 1} / ${imageLinks.length}`;
+    const loadedImagesCount = container.getElementsByTagName('img').length;
+    counterElement.textContent = `${currentImageIndex + 1} / ${loadedImagesCount}`;
 }
     </script>
 </body>
