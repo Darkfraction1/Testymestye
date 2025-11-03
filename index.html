@@ -57,13 +57,6 @@
             opacity: 1;
         }
 
-        .image-wrapper {
-            position: relative;
-            width: 100%;
-            margin: 0;
-            padding: 0;
-        }
-
         img {
             width: 100%;
             max-width: 100%;
@@ -78,36 +71,6 @@
             user-drag: none;
             -webkit-touch-callout: none;
             pointer-events: none;
-        }
-
-        .loading-indicator {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            text-align: center;
-            color: white;
-            z-index: 10;
-        }
-
-        .spinner {
-            width: 40px;
-            height: 40px;
-            border: 4px solid rgba(255, 255, 255, 0.3);
-            border-top: 4px solid white;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto;
-        }
-
-        .progress-text {
-            margin-top: 10px;
-            font-size: 14px;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
 
         #counter {
@@ -164,7 +127,7 @@ let currentImageIndex = 0;
 let scrollTimeout;
 let isScrolling = false;
 
-// === ИЗМЕНЕНИЕ: последовательная загрузка с индикаторами ===
+// Основная функция инициализации
 async function initializeGallery() {
     if (imageLinks.length === 0) {
         await loadBackupImage();
@@ -172,24 +135,7 @@ async function initializeGallery() {
     }
 
     try {
-        // Создаем контейнеры для всех изображений с индикаторами загрузки
-        for (let i = 0; i < imageLinks.length; i++) {
-            const imageWrapper = document.createElement('div');
-            imageWrapper.className = 'image-wrapper';
-            
-            // Создаем индикатор загрузки
-            const loadingIndicator = document.createElement('div');
-            loadingIndicator.className = 'loading-indicator';
-            loadingIndicator.innerHTML = `
-                <div class="spinner"></div>
-                <div class="progress-text">0%</div>
-            `;
-            
-            imageWrapper.appendChild(loadingIndicator);
-            container.appendChild(imageWrapper);
-        }
-
-        // Загружаем изображения последовательно
+        // === ИЗМЕНЕНИЕ: последовательная загрузка вместо параллельной ===
         await loadImagesSequentially();
         
         // Проверяем, загрузились ли хоть какие-то изображения
@@ -207,7 +153,7 @@ async function initializeGallery() {
     }
 }
 
-// === ИЗМЕНЕНИЕ: функция для загрузки резервного изображения ===
+// Функция для загрузки резервного изображения
 async function loadBackupImage() {
     try {
         const backupImageUrl = ''; // Добавьте вашу ссылку сюда
@@ -238,100 +184,46 @@ async function loadBackupImage() {
     }
 }
 
-// === ИЗМЕНЕНИЕ: последовательная загрузка с отслеживанием прогресса ===
+// === ИЗМЕНЕНИЕ: последовательная загрузка изображений ===
 async function loadImagesSequentially() {
-    const imageWrappers = container.getElementsByClassName('image-wrapper');
-    
     for (let i = 0; i < imageLinks.length; i++) {
         const link = imageLinks[i];
-        const imageWrapper = imageWrappers[i];
-        const progressText = imageWrapper.querySelector('.progress-text');
-        
         try {
-            // Обновляем прогресс
-            progressText.textContent = '0%';
-            
             const response = await fetch(link);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             
-            const contentLength = response.headers.get('content-length');
-            let loaded = 0;
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
             
-            // Если известен размер контента, отслеживаем прогресс
-            if (contentLength) {
-                const total = parseInt(contentLength, 10);
-                const reader = response.body.getReader();
-                const chunks = [];
-                
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
-                    
-                    chunks.push(value);
-                    loaded += value.length;
-                    const percent = Math.round((loaded / total) * 100);
-                    progressText.textContent = `${percent}%`;
-                }
-                
-                const blob = new Blob(chunks);
-                const blobUrl = URL.createObjectURL(blob);
-                await createImageElement(blobUrl, imageWrapper, i);
-            } else {
-                // Если размер контента неизвестен, просто показываем индикатор
-                progressText.textContent = 'Загрузка...';
-                const blob = await response.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                await createImageElement(blobUrl, imageWrapper, i);
+            const imgElement = new Image();
+            imgElement.src = blobUrl;
+            imgElement.alt = `Image ${i + 1}`;
+            imgElement.setAttribute('draggable', 'false');
+
+            imgElement.addEventListener('contextmenu', function(event) {
+                event.preventDefault();
+                return false;
+            }, { passive: false });
+
+            // Ждем загрузки каждого изображения перед переходом к следующему
+            await new Promise((resolve) => {
+                imgElement.onload = resolve;
+                imgElement.onerror = resolve; // Разрешаем промис даже при ошибке
+            });
+
+            // Проверяем, загрузилось ли изображение успешно
+            if (imgElement.complete && imgElement.naturalHeight !== 0) {
+                container.appendChild(imgElement);
             }
             
         } catch (error) {
             console.error(`Ошибка загрузки изображения ${i + 1}:`, error);
-            // Удаляем индикатор загрузки для этого изображения
-            const loadingIndicator = imageWrapper.querySelector('.loading-indicator');
-            if (loadingIndicator) {
-                imageWrapper.removeChild(loadingIndicator);
-            }
+            // Продолжаем загрузку следующих изображений
         }
     }
 }
 
-// === ИЗМЕНЕНИЕ: функция создания элемента изображения ===
-function createImageElement(blobUrl, imageWrapper, index) {
-    return new Promise((resolve) => {
-        const imgElement = new Image();
-        imgElement.src = blobUrl;
-        imgElement.alt = `Image ${index + 1}`;
-        imgElement.setAttribute('draggable', 'false');
-
-        imgElement.addEventListener('contextmenu', function(event) {
-            event.preventDefault();
-            return false;
-        }, { passive: false });
-
-        imgElement.onload = function() {
-            // Удаляем индикатор загрузки
-            const loadingIndicator = imageWrapper.querySelector('.loading-indicator');
-            if (loadingIndicator) {
-                imageWrapper.removeChild(loadingIndicator);
-            }
-            
-            // Добавляем изображение
-            imageWrapper.appendChild(imgElement);
-            resolve();
-        };
-
-        imgElement.onerror = function() {
-            // Удаляем индикатор загрузки при ошибке
-            const loadingIndicator = imageWrapper.querySelector('.loading-indicator');
-            if (loadingIndicator) {
-                imageWrapper.removeChild(loadingIndicator);
-            }
-            resolve();
-        };
-    });
-}
-
-// Загружаем галерею только когда страница полностью готова
+// Загружаем галерею когда страница полностью готова
 window.addEventListener('load', function() {
     setTimeout(initializeGallery, 100);
 });
