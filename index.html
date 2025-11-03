@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://telegram.org/js/telegram-web-app.js  "></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+        
+        body {
+            margin: 0;
+            padding: 0;
+            color: var(--tg-theme-text-color);
+            background-color: var(--tg-theme-bg-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            overflow: hidden;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        #imageContainer {
+            width: 100%;
+            flex-grow: 1;
+            overflow-y: auto;
+            position: relative;
+            /* Полностью скрываем стандартную полосу прокрутки */
+            scrollbar-width: none; /* Firefox */
+            -ms-overflow-style: none; /* IE и Edge */
+            /* === ИЗМЕНЕНИЕ: скрываем контейнер до полной загрузки === */
+            display: none;
+        }
+
+        /* === ИЗМЕНЕНИЕ: добавляем стили для индикатора загрузки === */
+        #loadingIndicator {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--tg-theme-text-color);
+            font-size: 16px;
+            z-index: 1002;
+        }
+
+        /* Скрываем стандартную полосу прокрутки в WebKit браузерах */
+        #imageContainer::-webkit-scrollbar {
+            display: none;
+        }
+
+        /* Кастомный скроллбар */
+        #customScrollbar {
+            position: fixed;
+            top: 0;
+            right: 2px;
+            width: 6px;
+            height: 100px;
+            background-color: rgba(0, 0, 0, 0.5);
+            border-radius: 3px;
+            z-index: 1001;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        #customScrollbar.visible {
+            opacity: 1;
+        }
+
+        img {
+            width: 100%;
+            max-width: 100%;
+            height: auto;
+            display: block;
+            margin: 0;
+            padding: 0;
+            -webkit-user-drag: none;
+            -khtml-user-drag: none;
+            -moz-user-drag: none;
+            -o-user-drag: none;
+            user-drag: none;
+            -webkit-touch-callout: none;
+            pointer-events: none;
+        }
+
+        #counter {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border-radius: 20px;
+            font-size: 14px;
+            z-index: 1000;
+            backdrop-filter: blur(5px);
+        }
+    </style>
+</head>
+<body>
+    <!-- === ИЗМЕНЕНИЕ: добавляем индикатор загрузки === -->
+    <div id="loadingIndicator">Загрузка изображений...</div>
+    <div id="imageContainer"></div>
+    <div id="customScrollbar"></div>
+    <div id="counter">0 / 0</div>
+
+    <script>
+       let tg = window.Telegram.WebApp;
+tg.expand();
+
+// Запрет контекстного меню для всех элементов документа
+document.addEventListener('contextmenu', function(e) {
+    e.preventDefault();
+    return false;
+}, { passive: false });
+
+// Запрет перетаскивания
+document.addEventListener('dragstart', function(e) {
+    e.preventDefault();
+    return false;
+});
+
+// Функция для получения параметров из URL
+function getUrlParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const imagesParam = urlParams.get('images');
+    return imagesParam ? JSON.parse(imagesParam) : [];
+}
+
+// Элементы DOM
+const container = document.getElementById('imageContainer');
+const customScrollbar = document.getElementById('customScrollbar');
+const counterElement = document.getElementById('counter');
+// === ИЗМЕНЕНИЕ: получаем элемент индикатора загрузки ===
+const loadingIndicator = document.getElementById('loadingIndicator');
+
+// Переменные
+const imageLinks = getUrlParams();
+let currentImageIndex = 0;
+let scrollTimeout;
+let isScrolling = false;
+// === ИЗМЕНЕНИЕ: добавляем переменную для отслеживания загрузки ===
+let imagesLoaded = false;
+
+// === ИЗМЕНЕНИЕ: заменяем старую логику загрузки на новую ===
+// Основная функция инициализации
+async function initializeGallery() {
+    if (imageLinks.length === 0) {
+        loadingIndicator.textContent = 'Изображения не найдены.';
+        return;
+    }
+
+    try {
+        // Используем способ 2: загрузка через Blob URL
+        await loadImagesWithBlobUrls();
+        
+        // После загрузки всех изображений инициализируем галерею
+        imagesLoaded = true;
+        loadingIndicator.style.display = 'none';
+        container.style.display = 'block';
+        initScrollbar();
+        updateCounter();
+        
+    } catch (error) {
+        console.error('Ошибка загрузки изображений:', error);
+        loadingIndicator.textContent = 'Ошибка загрузки изображений';
+    }
+}
+
+// === ИЗМЕНЕНИЕ: способ 2 - загрузка через Blob URL ===
+async function loadImagesWithBlobUrls() {
+    const loadPromises = imageLinks.map(async (link, index) => {
+        try {
+            const response = await fetch(link);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            const imgElement = new Image();
+            imgElement.src = blobUrl;
+            imgElement.alt = `Image ${index + 1}`;
+            imgElement.setAttribute('draggable', 'false');
+
+            // Добавляем обработчик contextmenu к каждому изображению
+            imgElement.addEventListener('contextmenu', function(event) {
+                event.preventDefault();
+                return false;
+            }, { passive: false });
+
+            // Обработчик ошибки загрузки изображения
+            imgElement.onerror = function() {
+                console.error(`Ошибка загрузки изображения ${index + 1}`);
+                // Можно добавить placeholder вместо битого изображения
+            };
+
+            container.appendChild(imgElement);
+            return Promise.resolve();
+            
+        } catch (error) {
+            console.error(`Ошибка загрузки изображения ${index + 1}:`, error);
+            // Создаем placeholder для неудачно загруженного изображения
+            const errorDiv = document.createElement('div');
+            errorDiv.textContent = `Ошибка загрузки изображения ${index + 1}`;
+            errorDiv.style.textAlign = 'center';
+            errorDiv.style.padding = '20px';
+            errorDiv.style.color = 'var(--tg-theme-hint-color)';
+            container.appendChild(errorDiv);
+            return Promise.resolve();
+        }
+    });
+
+    // Ждем загрузки всех изображений
+    await Promise.all(loadPromises);
+}
+
+// === ИЗМЕНЕНИЕ: способ 1 - отложенная загрузка до полной готовности страницы ===
+// Загружаем галерею только когда страница полностью готова
+window.addEventListener('load', function() {
+    // Небольшая задержка для гарантии полной загрузки
+    setTimeout(initializeGallery, 100);
+});
+
+// Инициализация скроллбара после загрузки изображений
+function initScrollbar() {
+    updateCustomScrollbar();
+
+    // Обработчики событий
+    container.addEventListener('scroll', function() {
+        if (!isScrolling) {
+            customScrollbar.classList.add('visible');
+            isScrolling = true;
+        }
+
+        updateCurrentImageIndex();
+        updateCustomScrollbar();
+
+        // Скрываем скроллбар через 1 секунду после остановки прокрутки
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(() => {
+            customScrollbar.classList.remove('visible');
+            isScrolling = false;
+        }, 1000);
+    });
+
+    // Также обновляем при изменении размера окна
+    window.addEventListener('resize', updateCustomScrollbar);
+
+    // Принудительно показываем скроллбар на 2 секунды при загрузке, если есть прокрутка
+    if (container.scrollHeight > container.clientHeight) {
+        customScrollbar.classList.add('visible');
+        setTimeout(() => {
+            if (!isScrolling) {
+                customScrollbar.classList.remove('visible');
+            }
+        }, 2000);
+    }
+}
+
+// Обновление позиции и размера кастомного скроллбара
+function updateCustomScrollbar() {
+    const scrollTop = container.scrollTop;
+    const scrollHeight = container.scrollHeight;
+    const clientHeight = container.clientHeight;
+
+    // Проверяем, нужна ли вообще полоса прокрутки
+    if (scrollHeight <= clientHeight) {
+        customScrollbar.style.display = 'none';
+        return;
+    }
+
+    customScrollbar.style.display = 'block';
+
+    // Вычисляем размер и позицию скроллбара
+    const scrollableHeight = scrollHeight - clientHeight;
+    const scrollPercent = scrollTop / scrollableHeight;
+
+    // Высота скроллбара пропорциональна видимой области
+    const scrollbarHeight = Math.max((clientHeight / scrollHeight) * clientHeight, 40);
+
+    // Позиция скроллбара
+    const scrollbarTop = scrollPercent * (clientHeight - scrollbarHeight);
+
+    customScrollbar.style.height = scrollbarHeight + 'px';
+    customScrollbar.style.top = scrollbarTop + 'px';
+}
+
+function updateCurrentImageIndex() {
+    const images = container.getElementsByTagName('img');
+    const containerRect = container.getBoundingClientRect();
+    const containerCenter = containerRect.top + containerRect.height / 2;
+
+    let closestIndex = 0;
+    let minDistance = Number.MAX_VALUE;
+
+    for (let i = 0; i < images.length; i++) {
+        const imgRect = images[i].getBoundingClientRect();
+        const imgCenter = imgRect.top + imgRect.height / 2;
+        const distance = Math.abs(imgCenter - containerCenter);
+
+        if (distance < minDistance) {
+            minDistance = distance;
+            closestIndex = i;
+        }
+    }
+
+    currentImageIndex = closestIndex;
+    updateCounter();
+}
+
+function updateCounter() {
+    counterElement.textContent = `${currentImageIndex + 1} / ${imageLinks.length}`;
+}
+    </script>
+</body>
+</html>
