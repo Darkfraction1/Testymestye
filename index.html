@@ -26,14 +26,13 @@
             -webkit-tap-highlight-color: transparent;
         }
         
-        /* === ИЗМЕНЕНИЕ: добавляем стили для фонового изображения === */
         #backgroundImage {
             position: fixed;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url(''); /* Добавьте вашу ссылку сюда */
+            background-image: url('https://dl.dropboxusercontent.com/scl/fi/z367rsijmzqkm7tgvsxfs/pick.JPEG?rlkey=a55vkpgre7yfhzmjz6ttf41gk'); /* Добавьте вашу ссылку сюда */
             background-size: cover;
             background-position: center;
             filter: blur(10px);
@@ -41,12 +40,11 @@
             z-index: -1;
         }
         
-        /* === ИЗМЕНЕНИЕ: заменяем стили индикатора загрузки на горизонтальную полоску === */
         #loadingIndicator {
             position: fixed;
             top: 50%;
             left: 10%;
-            width: 80%;
+            width: 40%;
             height: 4px;
             background-color: rgba(255, 255, 255, 0.3);
             border-radius: 2px;
@@ -132,7 +130,6 @@
     </style>
 </head>
 <body>
-    <!-- === ИЗМЕНЕНИЕ: добавляем фоновое изображение и новый индикатор загрузки === -->
     <div id="backgroundImage"></div>
     <div id="loadingIndicator">
         <div id="loadingProgress"></div>
@@ -187,7 +184,8 @@ async function initializeGallery() {
     }
 
     try {
-        await loadImagesWithBlobUrls();
+        // === ИЗМЕНЕНИЕ: последовательная загрузка изображений ===
+        await loadImagesSequentially();
         
         // Проверяем, загрузились ли хоть какие-то изображения
         const loadedImages = container.getElementsByTagName('img').length;
@@ -244,9 +242,10 @@ async function loadBackupImage() {
     }
 }
 
-// === ИЗМЕНЕНИЕ: обновленная функция загрузки изображений ===
-async function loadImagesWithBlobUrls() {
-    const loadPromises = imageLinks.map(async (link, index) => {
+// === ИЗМЕНЕНИЕ: последовательная загрузка изображений вместо параллельной ===
+async function loadImagesSequentially() {
+    for (let i = 0; i < imageLinks.length; i++) {
+        const link = imageLinks[i];
         try {
             const response = await fetch(link);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -256,7 +255,7 @@ async function loadImagesWithBlobUrls() {
             
             const imgElement = new Image();
             imgElement.src = blobUrl;
-            imgElement.alt = `Image ${index + 1}`;
+            imgElement.alt = `Image ${i + 1}`;
             imgElement.setAttribute('draggable', 'false');
 
             imgElement.addEventListener('contextmenu', function(event) {
@@ -264,13 +263,7 @@ async function loadImagesWithBlobUrls() {
                 return false;
             }, { passive: false });
 
-            // === ИЗМЕНЕНИЕ: убираем обработчик ошибок с сообщениями ===
-            imgElement.onerror = function() {
-                console.error(`Ошибка загрузки изображения ${index + 1}`);
-                // Не добавляем изображение в контейнер при ошибке
-            };
-
-            // Добавляем изображение только если оно загрузилось успешно
+            // Ждем загрузки каждого изображения перед переходом к следующему
             await new Promise((resolve, reject) => {
                 imgElement.onload = resolve;
                 imgElement.onerror = resolve; // Разрешаем промис даже при ошибке
@@ -282,12 +275,10 @@ async function loadImagesWithBlobUrls() {
             }
             
         } catch (error) {
-            console.error(`Ошибка загрузки изображения ${index + 1}:`, error);
-            // Не создаем сообщения об ошибках
+            console.error(`Ошибка загрузки изображения ${i + 1}:`, error);
+            // Продолжаем загрузку следующих изображений даже при ошибке
         }
-    });
-
-    await Promise.all(loadPromises);
+    }
 }
 
 // Загружаем галерею только когда страница полностью готова
