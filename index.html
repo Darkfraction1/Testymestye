@@ -52,7 +52,6 @@
             background-size: cover;
             background-position: center;
             filter: blur(10px);
-            opacity: 0.7;
             z-index: -1;
         }
 
@@ -79,8 +78,8 @@
                 from 0deg,
                 white 0deg,
                 white var(--progress, 0deg),
-                rgba(255, 255, 255, 0.3) var(--progress, 0deg),
-                rgba(255, 255, 255, 0.3) 360deg
+                transparent var(--progress, 0deg),
+                transparent 360deg
             );
             -webkit-mask: radial-gradient(circle, transparent 60%, black 61%);
             mask: radial-gradient(circle, transparent 60%, black 61%);
