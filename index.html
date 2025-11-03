@@ -48,7 +48,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-image: url(''); /* Добавьте вашу ссылку сюда */
+            background-image: url('https://dl.dropboxusercontent.com/scl/fi/bjp9g7q494lggqjbluq9g/.jpg?rlkey=l9cq946apz6drp3opzsi8y94b'); /* Добавьте вашу ссылку сюда */
             background-size: cover;
             background-position: center;
             filter: blur(10px);
@@ -63,21 +63,37 @@
             height: 80px;
         }
 
-        /* Разорванный круговой индикатор */
-        .broken-spinner {
+        /* Контейнер для прогресс-кольца */
+        .progress-ring {
+            position: relative;
+            width: 80px;
+            height: 80px;
+        }
+
+        /* Заполняющееся прогресс-кольцо */
+        .progress-circle {
             width: 100%;
             height: 100%;
             border-radius: 50%;
             background: conic-gradient(
                 from 0deg,
-                transparent 0deg,
-                white 10deg,
-                white 350deg,
-                transparent 350deg
+                white 0deg,
+                white var(--progress, 0deg),
+                rgba(255, 255, 255, 0.3) var(--progress, 0deg),
+                rgba(255, 255, 255, 0.3) 360deg
             );
             -webkit-mask: radial-gradient(circle, transparent 60%, black 61%);
             mask: radial-gradient(circle, transparent 60%, black 61%);
-            animation: spin 1.5s linear infinite;
+            transition: --progress 0.3s ease;
+        }
+
+        /* Поддержка свойства --progress для анимации */
+        @supports (background: conic-gradient(from 0deg, white 0deg, white 1deg)) {
+            @property --progress {
+                syntax: '<angle>';
+                initial-value: 0deg;
+                inherits: false;
+            }
         }
 
         /* Проценты в центре */
@@ -87,14 +103,9 @@
             left: 50%;
             transform: translate(-50%, -50%);
             color: white;
-            font-size: 14px; /* Уменьшенный размер */
+            font-size: 12px;
             font-weight: bold;
             text-shadow: 0 0 3px rgba(0, 0, 0, 0.5);
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
         }
 
         #imageContainer {
@@ -104,7 +115,7 @@
             position: relative;
             scrollbar-width: none;
             -ms-overflow-style: none;
-            display: none; /* Скрыт до загрузки */
+            display: none;
         }
 
         #imageContainer::-webkit-scrollbar {
@@ -165,7 +176,9 @@
     <div id="loadingScreen">
         <div id="loadingBackground"></div>
         <div class="loading-indicator">
-            <div class="broken-spinner"></div>
+            <div class="progress-ring">
+                <div class="progress-circle"></div>
+            </div>
             <div id="loadingPercent">0%</div>
         </div>
     </div>
@@ -241,7 +254,7 @@ async function initializeGallery() {
 // Функция для загрузки резервного изображения
 async function loadBackupImage() {
     try {
-        const backupImageUrl = ''; // Добавьте вашу ссылку сюда
+        const backupImageUrl = 'https://dl.dropboxusercontent.com/scl/fi/ud41xrucy8trznbv8h05k/111.jpg?rlkey=31kfork0w5lo77akjwj9ci0f1'; // Добавьте вашу ссылку сюда
         if (backupImageUrl) {
             const response = await fetch(backupImageUrl);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -296,7 +309,7 @@ async function loadImagesSequentially() {
             // Ждем загрузки каждого изображения перед переходом к следующему
             await new Promise((resolve) => {
                 imgElement.onload = resolve;
-                imgElement.onerror = resolve; // Разрешаем промис даже при ошибке
+                imgElement.onerror = resolve;
             });
 
             // Проверяем, загрузилось ли изображение успешно
@@ -307,14 +320,44 @@ async function loadImagesSequentially() {
             // Обновляем прогресс
             loadedCount++;
             const progress = Math.round((loadedCount / imageLinks.length) * 100);
+            const progressDeg = (progress * 3.6) + 'deg';
             loadingPercent.textContent = `${progress}%`;
+
+            // Обновляем прогресс-кольцо
+            const progressCircle = document.querySelector('.progress-circle');
+            if (CSS.supports('--progress', '0deg')) {
+                progressCircle.style.setProperty('--progress', progressDeg);
+            } else {
+                progressCircle.style.background = `conic-gradient(
+                    from 0deg,
+                    white 0deg,
+                    white ${progressDeg},
+                    rgba(255, 255, 255, 0.3) ${progressDeg},
+                    rgba(255, 255, 255, 0.3) 360deg
+                )`;
+            }
             
         } catch (error) {
             console.error(`Ошибка загрузки изображения ${i + 1}:`, error);
             // Увеличиваем счетчик даже при ошибке, чтобы прогресс продолжался
             loadedCount++;
             const progress = Math.round((loadedCount / imageLinks.length) * 100);
+            const progressDeg = (progress * 3.6) + 'deg';
             loadingPercent.textContent = `${progress}%`;
+
+            // Обновляем прогресс-кольцо
+            const progressCircle = document.querySelector('.progress-circle');
+            if (CSS.supports('--progress', '0deg')) {
+                progressCircle.style.setProperty('--progress', progressDeg);
+            } else {
+                progressCircle.style.background = `conic-gradient(
+                    from 0deg,
+                    white 0deg,
+                    white ${progressDeg},
+                    rgba(255, 255, 255, 0.3) ${progressDeg},
+                    rgba(255, 255, 255, 0.3) 360deg
+                )`;
+            }
         }
     }
 }
