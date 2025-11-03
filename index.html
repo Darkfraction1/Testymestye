@@ -26,6 +26,59 @@
             -webkit-tap-highlight-color: transparent;
         }
 
+        /* Экран загрузки */
+        #loadingScreen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            background-color: var(--tg-theme-bg-color);
+        }
+
+        /* Фоновая картинка с размытием */
+        #loadingBackground {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url(''); /* Добавьте вашу ссылку сюда */
+            background-size: cover;
+            background-position: center;
+            filter: blur(10px);
+            opacity: 0.7;
+            z-index: -1;
+        }
+
+        /* Круговой индикатор */
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        /* Проценты загрузки */
+        #loadingPercent {
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
         #imageContainer {
             width: 100%;
             flex-grow: 1;
@@ -33,6 +86,7 @@
             position: relative;
             scrollbar-width: none;
             -ms-overflow-style: none;
+            display: none; /* Скрыт до загрузки */
         }
 
         #imageContainer::-webkit-scrollbar {
@@ -89,6 +143,14 @@
     </style>
 </head>
 <body>
+    <!-- Экран загрузки -->
+    <div id="loadingScreen">
+        <div id="loadingBackground"></div>
+        <div class="spinner"></div>
+        <div id="loadingPercent">0%</div>
+    </div>
+
+    <!-- Галерея (изначально скрыта) -->
     <div id="imageContainer"></div>
     <div id="customScrollbar"></div>
     <div id="counter">0 / 0</div>
@@ -120,6 +182,9 @@ function getUrlParams() {
 const container = document.getElementById('imageContainer');
 const customScrollbar = document.getElementById('customScrollbar');
 const counterElement = document.getElementById('counter');
+const loadingScreen = document.getElementById('loadingScreen');
+const loadingPercent = document.getElementById('loadingPercent');
+const loadingBackground = document.getElementById('loadingBackground');
 
 // Переменные
 const imageLinks = getUrlParams();
@@ -135,17 +200,17 @@ async function initializeGallery() {
     }
 
     try {
-        // === ИЗМЕНЕНИЕ: последовательная загрузка вместо параллельной ===
+        // Последовательная загрузка изображений
         await loadImagesSequentially();
         
         // Проверяем, загрузились ли хоть какие-то изображения
         const loadedImages = container.getElementsByTagName('img').length;
         if (loadedImages === 0) {
             await loadBackupImage();
+        } else {
+            // Все изображения загружены, показываем галерею
+            showGallery();
         }
-        
-        initScrollbar();
-        updateCounter();
         
     } catch (error) {
         console.error('Ошибка загрузки изображений:', error);
@@ -176,16 +241,19 @@ async function loadBackupImage() {
 
             container.appendChild(imgElement);
             
-            initScrollbar();
-            updateCounter();
+            showGallery();
         }
     } catch (error) {
         console.error('Ошибка загрузки резервного изображения:', error);
+        // Даже при ошибке показываем галерею
+        showGallery();
     }
 }
 
-// === ИЗМЕНЕНИЕ: последовательная загрузка изображений ===
+// Последовательная загрузка изображений с отслеживанием прогресса
 async function loadImagesSequentially() {
+    let loadedCount = 0;
+    
     for (let i = 0; i < imageLinks.length; i++) {
         const link = imageLinks[i];
         try {
@@ -216,11 +284,32 @@ async function loadImagesSequentially() {
                 container.appendChild(imgElement);
             }
             
+            // Обновляем прогресс
+            loadedCount++;
+            const progress = Math.round((loadedCount / imageLinks.length) * 100);
+            loadingPercent.textContent = `${progress}%`;
+            
         } catch (error) {
             console.error(`Ошибка загрузки изображения ${i + 1}:`, error);
-            // Продолжаем загрузку следующих изображений
+            // Увеличиваем счетчик даже при ошибке, чтобы прогресс продолжался
+            loadedCount++;
+            const progress = Math.round((loadedCount / imageLinks.length) * 100);
+            loadingPercent.textContent = `${progress}%`;
         }
     }
+}
+
+// Показать галерею после загрузки
+function showGallery() {
+    // Скрываем экран загрузки
+    loadingScreen.style.display = 'none';
+    
+    // Показываем галерею
+    container.style.display = 'block';
+    
+    // Инициализируем скроллбар и счетчик
+    initScrollbar();
+    updateCounter();
 }
 
 // Загружаем галерею когда страница полностью готова
