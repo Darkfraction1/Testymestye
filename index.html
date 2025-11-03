@@ -25,46 +25,6 @@
             -webkit-touch-callout: none;
             -webkit-tap-highlight-color: transparent;
         }
-        
-        #backgroundImage {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image: url('https://dl.dropboxusercontent.com/scl/fi/z367rsijmzqkm7tgvsxfs/pick.JPEG?rlkey=a55vkpgre7yfhzmjz6ttf41gk'); /* Добавьте вашу ссылку сюда */
-            background-size: cover;
-            background-position: center;
-            filter: blur(10px);
-            opacity: 0.7;
-            z-index: -1;
-        }
-        
-        #loadingIndicator {
-            position: fixed;
-            top: 50%;
-            left: 10%;
-            width: 40%;
-            height: 4px;
-            background-color: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
-            overflow: hidden;
-            z-index: 1002;
-        }
-        
-        #loadingProgress {
-            height: 100%;
-            width: 0%;
-            background-color: white;
-            border-radius: 2px;
-            animation: loading 1.5s ease-in-out infinite;
-        }
-        
-        @keyframes loading {
-            0% { transform: translateX(-100%); }
-            50% { transform: translateX(0%); }
-            100% { transform: translateX(100%); }
-        }
 
         #imageContainer {
             width: 100%;
@@ -73,7 +33,6 @@
             position: relative;
             scrollbar-width: none;
             -ms-overflow-style: none;
-            display: none;
         }
 
         #imageContainer::-webkit-scrollbar {
@@ -98,6 +57,13 @@
             opacity: 1;
         }
 
+        .image-wrapper {
+            position: relative;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
         img {
             width: 100%;
             max-width: 100%;
@@ -112,6 +78,36 @@
             user-drag: none;
             -webkit-touch-callout: none;
             pointer-events: none;
+        }
+
+        .loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: white;
+            z-index: 10;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        .progress-text {
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         #counter {
@@ -130,10 +126,6 @@
     </style>
 </head>
 <body>
-    <div id="backgroundImage"></div>
-    <div id="loadingIndicator">
-        <div id="loadingProgress"></div>
-    </div>
     <div id="imageContainer"></div>
     <div id="customScrollbar"></div>
     <div id="counter">0 / 0</div>
@@ -165,44 +157,52 @@ function getUrlParams() {
 const container = document.getElementById('imageContainer');
 const customScrollbar = document.getElementById('customScrollbar');
 const counterElement = document.getElementById('counter');
-const loadingIndicator = document.getElementById('loadingIndicator');
-const backgroundImage = document.getElementById('backgroundImage');
 
 // Переменные
 const imageLinks = getUrlParams();
 let currentImageIndex = 0;
 let scrollTimeout;
 let isScrolling = false;
-let imagesLoaded = false;
 
-// === ИЗМЕНЕНИЕ: обновленная функция инициализации ===
+// === ИЗМЕНЕНИЕ: последовательная загрузка с индикаторами ===
 async function initializeGallery() {
     if (imageLinks.length === 0) {
-        // Если нет изображений, загружаем одну картинку по ссылке (добавьте вашу ссылку)
         await loadBackupImage();
         return;
     }
 
     try {
-        // === ИЗМЕНЕНИЕ: последовательная загрузка изображений ===
+        // Создаем контейнеры для всех изображений с индикаторами загрузки
+        for (let i = 0; i < imageLinks.length; i++) {
+            const imageWrapper = document.createElement('div');
+            imageWrapper.className = 'image-wrapper';
+            
+            // Создаем индикатор загрузки
+            const loadingIndicator = document.createElement('div');
+            loadingIndicator.className = 'loading-indicator';
+            loadingIndicator.innerHTML = `
+                <div class="spinner"></div>
+                <div class="progress-text">0%</div>
+            `;
+            
+            imageWrapper.appendChild(loadingIndicator);
+            container.appendChild(imageWrapper);
+        }
+
+        // Загружаем изображения последовательно
         await loadImagesSequentially();
         
         // Проверяем, загрузились ли хоть какие-то изображения
         const loadedImages = container.getElementsByTagName('img').length;
         if (loadedImages === 0) {
-            // Если ни одно изображение не загрузилось, загружаем резервное
             await loadBackupImage();
         }
         
-        imagesLoaded = true;
-        loadingIndicator.style.display = 'none';
-        container.style.display = 'block';
         initScrollbar();
         updateCounter();
         
     } catch (error) {
         console.error('Ошибка загрузки изображений:', error);
-        // В случае ошибки тоже загружаем резервное изображение
         await loadBackupImage();
     }
 }
@@ -230,55 +230,105 @@ async function loadBackupImage() {
 
             container.appendChild(imgElement);
             
-            imagesLoaded = true;
-            loadingIndicator.style.display = 'none';
-            container.style.display = 'block';
             initScrollbar();
             updateCounter();
         }
     } catch (error) {
         console.error('Ошибка загрузки резервного изображения:', error);
-        loadingIndicator.style.display = 'none';
     }
 }
 
-// === ИЗМЕНЕНИЕ: последовательная загрузка изображений вместо параллельной ===
+// === ИЗМЕНЕНИЕ: последовательная загрузка с отслеживанием прогресса ===
 async function loadImagesSequentially() {
+    const imageWrappers = container.getElementsByClassName('image-wrapper');
+    
     for (let i = 0; i < imageLinks.length; i++) {
         const link = imageLinks[i];
+        const imageWrapper = imageWrappers[i];
+        const progressText = imageWrapper.querySelector('.progress-text');
+        
         try {
+            // Обновляем прогресс
+            progressText.textContent = '0%';
+            
             const response = await fetch(link);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             
-            const blob = await response.blob();
-            const blobUrl = URL.createObjectURL(blob);
+            const contentLength = response.headers.get('content-length');
+            let loaded = 0;
             
-            const imgElement = new Image();
-            imgElement.src = blobUrl;
-            imgElement.alt = `Image ${i + 1}`;
-            imgElement.setAttribute('draggable', 'false');
-
-            imgElement.addEventListener('contextmenu', function(event) {
-                event.preventDefault();
-                return false;
-            }, { passive: false });
-
-            // Ждем загрузки каждого изображения перед переходом к следующему
-            await new Promise((resolve, reject) => {
-                imgElement.onload = resolve;
-                imgElement.onerror = resolve; // Разрешаем промис даже при ошибке
-            });
-
-            // Проверяем, загрузилось ли изображение успешно
-            if (imgElement.complete && imgElement.naturalHeight !== 0) {
-                container.appendChild(imgElement);
+            // Если известен размер контента, отслеживаем прогресс
+            if (contentLength) {
+                const total = parseInt(contentLength, 10);
+                const reader = response.body.getReader();
+                const chunks = [];
+                
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    chunks.push(value);
+                    loaded += value.length;
+                    const percent = Math.round((loaded / total) * 100);
+                    progressText.textContent = `${percent}%`;
+                }
+                
+                const blob = new Blob(chunks);
+                const blobUrl = URL.createObjectURL(blob);
+                await createImageElement(blobUrl, imageWrapper, i);
+            } else {
+                // Если размер контента неизвестен, просто показываем индикатор
+                progressText.textContent = 'Загрузка...';
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                await createImageElement(blobUrl, imageWrapper, i);
             }
             
         } catch (error) {
             console.error(`Ошибка загрузки изображения ${i + 1}:`, error);
-            // Продолжаем загрузку следующих изображений даже при ошибке
+            // Удаляем индикатор загрузки для этого изображения
+            const loadingIndicator = imageWrapper.querySelector('.loading-indicator');
+            if (loadingIndicator) {
+                imageWrapper.removeChild(loadingIndicator);
+            }
         }
     }
+}
+
+// === ИЗМЕНЕНИЕ: функция создания элемента изображения ===
+function createImageElement(blobUrl, imageWrapper, index) {
+    return new Promise((resolve) => {
+        const imgElement = new Image();
+        imgElement.src = blobUrl;
+        imgElement.alt = `Image ${index + 1}`;
+        imgElement.setAttribute('draggable', 'false');
+
+        imgElement.addEventListener('contextmenu', function(event) {
+            event.preventDefault();
+            return false;
+        }, { passive: false });
+
+        imgElement.onload = function() {
+            // Удаляем индикатор загрузки
+            const loadingIndicator = imageWrapper.querySelector('.loading-indicator');
+            if (loadingIndicator) {
+                imageWrapper.removeChild(loadingIndicator);
+            }
+            
+            // Добавляем изображение
+            imageWrapper.appendChild(imgElement);
+            resolve();
+        };
+
+        imgElement.onerror = function() {
+            // Удаляем индикатор загрузки при ошибке
+            const loadingIndicator = imageWrapper.querySelector('.loading-indicator');
+            if (loadingIndicator) {
+                imageWrapper.removeChild(loadingIndicator);
+            }
+            resolve();
+        };
+    });
 }
 
 // Загружаем галерею только когда страница полностью готова
