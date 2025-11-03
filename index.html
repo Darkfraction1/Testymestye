@@ -39,6 +39,7 @@
             align-items: center;
             z-index: 1000;
             background-color: var(--tg-theme-bg-color);
+            overflow: hidden;
         }
 
         /* Фоновая картинка с размытием */
@@ -51,7 +52,7 @@
             background-image: url('https://dl.dropboxusercontent.com/scl/fi/bjp9g7q494lggqjbluq9g/.jpg?rlkey=l9cq946apz6drp3opzsi8y94b'); /* Добавьте вашу ссылку сюда */
             background-size: cover;
             background-position: center;
-            filter: blur(10px);
+            filter: blur(5px);
             z-index: -1;
         }
 
@@ -331,8 +332,8 @@ async function loadImagesSequentially() {
                     from 0deg,
                     white 0deg,
                     white ${progressDeg},
-                    rgba(255, 255, 255, 0.3) ${progressDeg},
-                    rgba(255, 255, 255, 0.3) 360deg
+                    transparent ${progressDeg},
+                    transparent 360deg
                 )`;
             }
             
@@ -353,8 +354,8 @@ async function loadImagesSequentially() {
                     from 0deg,
                     white 0deg,
                     white ${progressDeg},
-                    rgba(255, 255, 255, 0.3) ${progressDeg},
-                    rgba(255, 255, 255, 0.3) 360deg
+                    transparent ${progressDeg},
+                    transparent 360deg
                 )`;
             }
         }
