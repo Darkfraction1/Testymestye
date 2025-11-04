@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
+        /* Ваши существующие стили остаются без изменений */
         * {
             box-sizing: border-box;
         }
@@ -224,7 +225,7 @@ let currentImageIndex = 0;
 let scrollTimeout;
 let isScrolling = false;
 
-        // Основная функция инициализации
+// Основная функция инициализации
 async function initializeGallery() {
     if (imageLinks.length === 0) {
         await loadBackupImage();
@@ -232,13 +233,16 @@ async function initializeGallery() {
     }
 
     try {
-        // Параллельная загрузка с приоритетом для первой картинки
-        await loadImagesWithPriority();
+        // Параллельная загрузка изображений
+        await loadImagesInParallel();
         
         // Проверяем, загрузились ли хоть какие-то изображения
         const loadedImages = container.getElementsByTagName('img').length;
         if (loadedImages === 0) {
             await loadBackupImage();
+        } else {
+            // Все изображения загружены, показываем галерею
+            showGallery();
         }
         
     } catch (error) {
@@ -247,16 +251,12 @@ async function initializeGallery() {
     }
 }
 
-// Параллельная загрузка с приоритетом для первой картинки
-async function loadImagesWithPriority() {
-    let loadedCount = 0;
-    let firstImageLoaded = false;
-    
-    // Сначала загружаем первую картинку отдельно
-    if (imageLinks.length > 0) {
-        try {
-            const firstLink = imageLinks[0];
-            const response = await fetch(firstLink);
+// Функция для загрузки резервного изображения
+async function loadBackupImage() {
+    try {
+        const backupImageUrl = 'https://dl.dropboxusercontent.com/scl/fi/ud41xrucy8trznbv8h05k/111.jpg?rlkey=31kfork0w5lo77akjwj9ci0f1';
+        if (backupImageUrl) {
+            const response = await fetch(backupImageUrl);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             
             const blob = await response.blob();
@@ -264,7 +264,7 @@ async function loadImagesWithPriority() {
             
             const imgElement = new Image();
             imgElement.src = blobUrl;
-            imgElement.alt = `Image 1`;
+            imgElement.alt = 'Backup Image';
             imgElement.setAttribute('draggable', 'false');
 
             imgElement.addEventListener('contextmenu', function(event) {
@@ -272,79 +272,70 @@ async function loadImagesWithPriority() {
                 return false;
             }, { passive: false });
 
-            await new Promise((resolve) => {
-                imgElement.onload = resolve;
-                imgElement.onerror = resolve;
-            });
-
-            if (imgElement.complete && imgElement.naturalHeight !== 0) {
-                container.appendChild(imgElement);
-                loadedCount++;
-                firstImageLoaded = true;
-                
-                // ОБНОВЛЕННАЯ ЧАСТЬ: Показываем галерею сразу после загрузки первой картинки
-                showGallery();
-            }
+            container.appendChild(imgElement);
             
-            // Обновляем прогресс для первой картинки
-            const progress = Math.round((loadedCount / imageLinks.length) * 100);
-            updateProgress(progress);
-            
-        } catch (error) {
-            console.error('Ошибка загрузки первой картинки:', error);
-            loadedCount++;
-            const progress = Math.round((loadedCount / imageLinks.length) * 100);
-            updateProgress(progress);
+            showGallery();
         }
+    } catch (error) {
+        console.error('Ошибка загрузки резервного изображения:', error);
+        // Даже при ошибке показываем галерею
+        showGallery();
     }
-    
-    // Затем параллельно загружаем остальные картинки
-    const remainingPromises = [];
-    for (let i = 1; i < imageLinks.length; i++) {
-        remainingPromises.push(loadSingleImage(imageLinks[i], i, loadedCount));
-    }
-    
-    // Ждем завершения загрузки всех остальных картинок
-    await Promise.allSettled(remainingPromises);
 }
 
-// Функция для загрузки одной картинки
-async function loadSingleImage(link, index, currentLoadedCount) {
-    try {
-        const response = await fetch(link);
-        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-        
-        const blob = await response.blob();
-        const blobUrl = URL.createObjectURL(blob);
-        
-        const imgElement = new Image();
-        imgElement.src = blobUrl;
-        imgElement.alt = `Image ${index + 1}`;
-        imgElement.setAttribute('draggable', 'false');
+// Параллельная загрузка изображений с отслеживанием прогресса
+async function loadImagesInParallel() {
+    let loadedCount = 0;
+    const totalCount = imageLinks.length;
+    
+    // Создаем массив промисов для параллельной загрузки
+    const loadPromises = imageLinks.map(async (link, index) => {
+        try {
+            const response = await fetch(link);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            
+            const blob = await response.blob();
+            const blobUrl = URL.createObjectURL(blob);
+            
+            const imgElement = new Image();
+            
+            // Ожидаем загрузки изображения
+            await new Promise((resolve, reject) => {
+                imgElement.onload = resolve;
+                imgElement.onerror = reject;
+                imgElement.src = blobUrl;
+            });
 
-        imgElement.addEventListener('contextmenu', function(event) {
-            event.preventDefault();
-            return false;
-        }, { passive: false });
+            imgElement.alt = `Image ${index + 1}`;
+            imgElement.setAttribute('draggable', 'false');
 
-        await new Promise((resolve) => {
-            imgElement.onload = resolve;
-            imgElement.onerror = resolve;
-        });
+            imgElement.addEventListener('contextmenu', function(event) {
+                event.preventDefault();
+                return false;
+            }, { passive: false });
 
-        if (imgElement.complete && imgElement.naturalHeight !== 0) {
-            container.appendChild(imgElement);
+            // Проверяем, загрузилось ли изображение успешно
+            if (imgElement.complete && imgElement.naturalHeight !== 0) {
+                // Добавляем изображение в контейнер в правильном порядке
+                container.appendChild(imgElement);
+                
+                // Обновляем прогресс
+                loadedCount++;
+                const progress = Math.round((loadedCount / totalCount) * 100);
+                updateProgress(progress);
+            }
+            
+        } catch (error) {
+            console.error(`Ошибка загрузки изображения ${index + 1}:`, error);
+            // Увеличиваем счетчик даже при ошибке, чтобы прогресс продолжался
+            loadedCount++;
+            const progress = Math.round((loadedCount / totalCount) * 100);
+            updateProgress(progress);
         }
-        
-        // Обновляем прогресс
-        const progress = Math.round(((currentLoadedCount + index) / imageLinks.length) * 100);
-        updateProgress(progress);
-        
-    } catch (error) {
-        console.error(`Ошибка загрузки изображения ${index + 1}:`, error);
-        const progress = Math.round(((currentLoadedCount + index) / imageLinks.length) * 100);
-        updateProgress(progress);
-    }
+    });
+
+    // Ожидаем завершения всех загрузок
+    await Promise.allSettled(loadPromises);
 }
 
 // Функция для обновления прогресса
@@ -352,7 +343,10 @@ function updateProgress(progress) {
     const circumference = 251.2;
     const offset = circumference - (progress / 100 * circumference);
     
+    // Обновляем прогресс-кольцо
     progressRingFill.style.strokeDashoffset = offset;
+    
+    // Обновляем текст процентов
     progressText.textContent = `${progress}%`;
 }
 
