@@ -233,8 +233,8 @@ async function initializeGallery() {
     }
 
     try {
-        // Параллельная загрузка изображений
-        await loadImagesInParallel();
+        // Параллельная загрузка изображений с сохранением порядка
+        await loadImagesInParallelOrdered();
         
         // Проверяем, загрузились ли хоть какие-то изображения
         const loadedImages = container.getElementsByTagName('img').length;
@@ -283,12 +283,12 @@ async function loadBackupImage() {
     }
 }
 
-// Параллельная загрузка изображений с отслеживанием прогресса
-async function loadImagesInParallel() {
+// Параллельная загрузка изображений с сохранением порядка
+async function loadImagesInParallelOrdered() {
     let loadedCount = 0;
     const totalCount = imageLinks.length;
     
-    // Создаем массив промисов для параллельной загрузки
+    // Создаем массив для хранения промисов загрузки
     const loadPromises = imageLinks.map(async (link, index) => {
         try {
             const response = await fetch(link);
@@ -316,26 +316,39 @@ async function loadImagesInParallel() {
 
             // Проверяем, загрузилось ли изображение успешно
             if (imgElement.complete && imgElement.naturalHeight !== 0) {
-                // Добавляем изображение в контейнер в правильном порядке
-                container.appendChild(imgElement);
-                
-                // Обновляем прогресс
-                loadedCount++;
-                const progress = Math.round((loadedCount / totalCount) * 100);
-                updateProgress(progress);
+                return { success: true, index, imgElement };
+            } else {
+                throw new Error('Image failed to load');
             }
             
         } catch (error) {
             console.error(`Ошибка загрузки изображения ${index + 1}:`, error);
-            // Увеличиваем счетчик даже при ошибке, чтобы прогресс продолжался
-            loadedCount++;
-            const progress = Math.round((loadedCount / totalCount) * 100);
-            updateProgress(progress);
+            return { success: false, index, error };
         }
     });
 
     // Ожидаем завершения всех загрузок
-    await Promise.allSettled(loadPromises);
+    const results = await Promise.allSettled(loadPromises);
+    
+    // Сортируем результаты по индексу и добавляем в DOM в правильном порядке
+    const sortedResults = results
+        .map((result, i) => result.status === 'fulfilled' ? result.value : {
+            success: false,
+            index: i,
+            error: result.reason
+        })
+        .sort((a, b) => a.index - b.index);
+
+    // Добавляем изображения в DOM в правильном порядке
+    for (const result of sortedResults) {
+        if (result.success) {
+            container.appendChild(result.imgElement);
+        }
+        // Обновляем прогресс для каждого изображения (даже при ошибке)
+        loadedCount++;
+        const progress = Math.round((loadedCount / totalCount) * 100);
+        updateProgress(progress);
+    }
 }
 
 // Функция для обновления прогресса
