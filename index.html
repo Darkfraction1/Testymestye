@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        /* ... (ваши существующие стили остаются без изменений) ... */
         * {
             box-sizing: border-box;
         }
@@ -151,7 +150,6 @@
     <div id="counter">0 / 0</div>
 
     <script>
-        // Инициализация Telegram Web App
         let tg = window.Telegram.WebApp;
         tg.expand();
 
@@ -173,12 +171,13 @@
         const loadingScreen = document.getElementById('loadingScreen');
         const loadingBackground = document.getElementById('loadingBackground');
 
-        // Переменные - ВАЖНО: они должны быть локальными для каждого экземпляра Mini App
+        // Переменные
+        let imageLinks = [];
         let currentImageIndex = 0;
         let scrollTimeout;
         let isScrolling = false;
         
-        // Ключевое изменение: blobUrls теперь локальная переменная
+        // Массив для хранения blob URL для последующей очистки
         let blobUrls = [];
 
         // Функция для получения параметров из URL
@@ -188,140 +187,75 @@
             return imagesParam ? JSON.parse(imagesParam) : [];
         }
 
-        // Функция очистки blob URL - теперь очищает только локальные URL
+        // Функция очистки blob URL
         function cleanupBlobUrls() {
-            if (blobUrls && blobUrls.length > 0) {
-                blobUrls.forEach(url => {
-                    try {
-                        URL.revokeObjectURL(url);
-                        console.log('Blob URL отозван:', url.substring(0, 50) + '...');
-                    } catch (e) {
-                        console.log('Ошибка при отзыве blob URL:', e);
-                    }
-                });
-                blobUrls = [];
-            }
+            blobUrls.forEach(url => {
+                try {
+                    URL.revokeObjectURL(url);
+                } catch (e) {
+                    console.log('Ошибка при отзыве blob URL:', e);
+                }
+            });
+            blobUrls = [];
         }
 
         // Функция очистки контейнера
         function cleanupContainer() {
-            if (container) {
-                container.innerHTML = '';
-            }
+            container.innerHTML = '';
         }
 
-        // Функция полной очистки - теперь использует локальные переменные
+        // Функция полной очистки
         function cleanup() {
-            console.log('Выполняется очистка для текущей Mini App');
-            cleanupContainer();
             cleanupBlobUrls();
-            
-            // Сброс других переменных
-            currentImageIndex = 0;
-            isScrolling = false;
-            clearTimeout(scrollTimeout);
+            cleanupContainer();
         }
+
+        // Обработчики событий для очистки при закрытии
+        window.addEventListener('pagehide', cleanup);
+        window.addEventListener('beforeunload', cleanup);
+        
+        // Обработчик события viewportChanged от Telegram Web App
+        tg.onEvent('viewportChanged', function(event) {
+            // Если Mini App закрывается, выполнить очистку
+            if (event.isStateStable === false) {
+                cleanup();
+            }
+        });
 
         // Основная функция инициализации
         async function initializeGallery() {
-            console.log('Инициализация галереи с новыми изображениями');
-            
             // Очистка перед загрузкой новых изображений
             cleanup();
             
-            // Получаем новые ссылки
-            const imageLinks = getUrlParams();
-            console.log('Получено ссылок:', imageLinks.length);
+            imageLinks = getUrlParams();
             
             if (imageLinks.length === 0) {
-                console.log('Нет ссылок, загружаем резервное изображение');
                 await loadBackupImage();
                 return;
             }
 
-            try {
-                // Параллельная загрузка изображений
-                await loadImagesInParallelOrdered(imageLinks);
-                
-                // Проверяем, загрузились ли изображения
-                const loadedImages = container.getElementsByTagName('img').length;
-                console.log('Загружено изображений:', loadedImages);
-                
-                if (loadedImages === 0) {
-                    console.log('Не загружено ни одного изображения, пробуем резервное');
-                    await loadBackupImage();
-                } else {
-                    // Все изображения загружены, показываем галерею
-                    showGallery();
-                }
-                
-            } catch (error) {
-                console.error('Ошибка загрузки изображений:', error);
-                await loadBackupImage();
-            }
+            // Начинаем загрузку изображений и сразу показываем галерею
+            loadImagesInParallelOrdered();
+            
+            // Показываем галерею сразу, не дожидаясь загрузки всех изображений
+            showGallery();
         }
 
         // Функция для загрузки резервного изображения
         async function loadBackupImage() {
             try {
                 const backupImageUrl = 'https://dl.dropboxusercontent.com/scl/fi/ud41xrucy8trznbv8h05k/111.jpg?rlkey=31kfork0w5lo77akjwj9ci0f1';
-                console.log('Загрузка резервного изображения:', backupImageUrl);
-                
-                const response = await fetch(backupImageUrl);
-                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-                
-                const blob = await response.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                
-                // Добавляем в локальный массив
-                blobUrls.push(blobUrl);
-                
-                const imgElement = new Image();
-                imgElement.src = blobUrl;
-                imgElement.alt = 'Backup Image';
-                imgElement.setAttribute('draggable', 'false');
-
-                imgElement.addEventListener('contextmenu', function(event) {
-                    event.preventDefault();
-                    return false;
-                }, { passive: false });
-
-                container.appendChild(imgElement);
-                
-                showGallery();
-            } catch (error) {
-                console.error('Ошибка загрузки резервного изображения:', error);
-                showGallery(); // Все равно показываем галерею
-            }
-        }
-
-        // Параллельная загрузка изображений с сохранением порядка
-        async function loadImagesInParallelOrdered(imageLinks) {
-            console.log('Начинаем параллельную загрузку изображений');
-            
-            // Создаем массив для хранения промисов загрузки
-            const loadPromises = imageLinks.map(async (link, index) => {
-                try {
-                    console.log(`Загрузка изображения ${index + 1}:`, link);
-                    const response = await fetch(link);
+                if (backupImageUrl) {
+                    const response = await fetch(backupImageUrl);
                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                     
                     const blob = await response.blob();
                     const blobUrl = URL.createObjectURL(blob);
-                    
-                    // Добавляем в локальный массив
                     blobUrls.push(blobUrl);
                     
                     const imgElement = new Image();
-                    
-                    // Ожидаем загрузки изображения
-                    await new Promise((resolve, reject) => {
-                        imgElement.onload = resolve;
-                        imgElement.onerror = reject;
-                        imgElement.src = blobUrl;
-                    });
-
-                    imgElement.alt = `Image ${index + 1}`;
+                    imgElement.src = blobUrl;
+                    imgElement.alt = 'Backup Image';
                     imgElement.setAttribute('draggable', 'false');
 
                     imgElement.addEventListener('contextmenu', function(event) {
@@ -329,45 +263,85 @@
                         return false;
                     }, { passive: false });
 
-                    // Проверяем, загрузилось ли изображение успешно
-                    if (imgElement.complete && imgElement.naturalHeight !== 0) {
-                        return { success: true, index, imgElement };
-                    } else {
-                        throw new Error('Image failed to load');
-                    }
+                    container.appendChild(imgElement);
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки резервного изображения:', error);
+            }
+        }
+
+        // Параллельная загрузка изображений с сохранением порядка
+        async function loadImagesInParallelOrdered() {
+            // Создаем массив для хранения промисов загрузки
+            const loadPromises = imageLinks.map(async (link, index) => {
+                try {
+                    const response = await fetch(link);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    
+                    const blob = await response.blob();
+                    const blobUrl = URL.createObjectURL(blob);
+                    blobUrls.push(blobUrl);
+                    
+                    const imgElement = new Image();
+                    
+                    // Создаем промис для загрузки изображения
+                    const loadPromise = new Promise((resolve, reject) => {
+                        imgElement.onload = () => {
+                            imgElement.alt = `Image ${index + 1}`;
+                            imgElement.setAttribute('draggable', 'false');
+
+                            imgElement.addEventListener('contextmenu', function(event) {
+                                event.preventDefault();
+                                return false;
+                            }, { passive: false });
+
+                            // Проверяем, загрузилось ли изображение успешно
+                            if (imgElement.complete && imgElement.naturalHeight !== 0) {
+                                resolve({ success: true, index, imgElement });
+                            } else {
+                                reject(new Error('Image failed to load'));
+                            }
+                        };
+                        
+                        imgElement.onerror = () => {
+                            reject(new Error('Image failed to load'));
+                        };
+                        
+                        imgElement.src = blobUrl;
+                    });
+
+                    // Ожидаем загрузки изображения
+                    const result = await loadPromise;
+                    
+                    // Добавляем изображение в контейнер сразу после загрузки
+                    container.appendChild(result.imgElement);
+                    
+                    // Обновляем счетчик после добавления изображения
+                    updateCounter();
+                    
+                    return result;
                     
                 } catch (error) {
                     console.error(`Ошибка загрузки изображения ${index + 1}:`, error);
+                    // Продолжаем загрузку остальных изображений, не прерывая процесс
                     return { success: false, index, error };
                 }
             });
 
-            // Ожидаем завершения всех загрузок
-            const results = await Promise.allSettled(loadPromises);
-            
-            // Сортируем результаты по индексу
-            const sortedResults = results
-                .map((result, i) => result.status === 'fulfilled' ? result.value : {
-                    success: false,
-                    index: i,
-                    error: result.reason
-                })
-                .sort((a, b) => a.index - b.index);
-
-            // Добавляем изображения в DOM в правильном порядке
-            for (const result of sortedResults) {
-                if (result.success) {
-                    container.appendChild(result.imgElement);
+            // Запускаем все промисы, но не блокируем основной поток
+            Promise.allSettled(loadPromises).then(results => {
+                console.log('Все изображения обработаны');
+                
+                // Если ни одно изображение не загрузилось, загружаем резервное
+                const loadedImages = container.getElementsByTagName('img').length;
+                if (loadedImages === 0) {
+                    loadBackupImage();
                 }
-            }
-            
-            console.log('Параллельная загрузка завершена');
+            });
         }
 
-        // Показать галерею после загрузки
+        // Показать галерею
         function showGallery() {
-            console.log('Показываем галерею');
-            
             // Скрываем экран загрузки
             loadingScreen.style.display = 'none';
             
@@ -381,6 +355,11 @@
             initScrollbar();
             updateCounter();
         }
+
+        // Загружаем галерею когда страница полностью готова
+        window.addEventListener('load', function() {
+            setTimeout(initializeGallery, 100);
+        });
 
         // Инициализация скроллбара после загрузки изображений
         function initScrollbar() {
@@ -465,12 +444,6 @@
             const loadedImagesCount = container.getElementsByTagName('img').length;
             counterElement.textContent = `${currentImageIndex + 1} / ${loadedImagesCount}`;
         }
-
-        // Главный обработчик загрузки страницы
-        window.addEventListener('load', function() {
-            console.log('Страница загружена, инициализируем галерею');
-            setTimeout(initializeGallery, 100);
-        });
     </script>
 </body>
 </html>
